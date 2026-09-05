@@ -54,7 +54,10 @@ jobs:
           cp -r "$BUNDLE_DIR"/* AppDir/usr/bin/
           cp nexus-aur.desktop AppDir/usr/share/applications/
           cp assets/icon.png AppDir/usr/share/icons/hicolor/512x512/apps/nexus-aur.png
-          cp assets/icon.png AppDir/icon.png
+
+          # Copie richieste da appimagetool nella root di AppDir
+          cp nexus-aur.desktop AppDir/nexus-aur.desktop
+          cp assets/icon.png AppDir/nexus-aur.png
 
           # Crea il file AppRun di avvio
           cat << 'EOF' > AppDir/AppRun
@@ -64,10 +67,7 @@ jobs:
           EOF
           chmod +x AppDir/AppRun
 
-          # Crea il file .desktop nella root di AppDir
-          cp nexus-aur.desktop AppDir/nexus-aur.desktop
-
-          # Compila l'AppImage (disabilitando il sandboxing dei permessi se necessario)
+          # Compila l'AppImage
           ARCH=x86_64 ./appimagetool --appimage-extract-and-run AppDir nexus-aur-x86_64.AppImage
 
       - name: Create GitHub Release
@@ -89,7 +89,7 @@ jobs:
           echo "Versione target AUR: $TAG_VERSION"
           echo "SHA256: $SHA256"
 
-          # Esegue un container Arch Linux per poter usare makepkg e git in sicurezza
+          # Esegue un container Arch Linux per usare makepkg e git in sicurezza
           docker run --rm \
             -e AUR_SSH_KEY="$AUR_SSH_KEY" \
             -e TAG_VERSION="$TAG_VERSION" \
