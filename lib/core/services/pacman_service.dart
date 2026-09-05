@@ -17,7 +17,7 @@ class PackageModel {
 
 class PacmanService {
   
-  // Ricerca robusta: interroga pacman (ufficiali) e yay (AUR) separatamente e unisce i risultati
+  // Ricerca robusta: interroga pacman (ufficiali) e yay (AUR) separatamente e unisce i risultati[cite: 1]
   static Future<List<PackageModel>> searchPackages(String query) async {
     if (query.trim().isEmpty) return [];
 
@@ -51,11 +51,11 @@ class PacmanService {
     return packages;
   }
 
-  // Ottiene la lista di tutti i pacchetti installati (ufficiali + AUR)
+  // Ottiene la lista di tutti i pacchetti installati (ufficiali + AUR)[cite: 1]
   static Future<List<PackageModel>> getInstalledPackages() async {
     List<PackageModel> installed = [];
     try {
-      // Identifica i pacchetti AUR (foreign packages)
+      // Identifica i pacchetti AUR (foreign packages)[cite: 1]
       final foreignResult = await Process.run('yay', ['-Qm']);
       Set<String> aurPackages = {};
       if (foreignResult.exitCode == 0) {
@@ -66,7 +66,7 @@ class PacmanService {
         }
       }
 
-      // Ottiene tutti i pacchetti installati nel sistema
+      // Ottiene tutti i pacchetti installati nel sistema[cite: 1]
       final result = await Process.run('pacman', ['-Q']);
       if (result.exitCode == 0) {
         final output = result.stdout.toString().replaceAll(RegExp(r'\x1b\[[0-9;]*m'), '');
@@ -92,10 +92,22 @@ class PacmanService {
     return installed;
   }
 
-  // Ottiene la lista degli aggiornamenti
+  // Ottiene la lista degli aggiornamenti (ufficiali + AUR)
   static Future<List<PackageModel>> getUpdates() async {
     List<PackageModel> updates = [];
     try {
+      // 1. Identifica quali pacchetti installati sono dell'AUR (foreign packages)
+      final foreignResult = await Process.run('yay', ['-Qm']);
+      Set<String> aurPackages = {};
+      if (foreignResult.exitCode == 0) {
+        for (var line in foreignResult.stdout.toString().split('\n')) {
+          if (line.trim().isEmpty) continue;
+          var parts = line.split(RegExp(r'\s+'));
+          if (parts.isNotEmpty) aurPackages.add(parts[0]);
+        }
+      }
+
+      // 2. Ottiene la lista di tutti gli aggiornamenti disponibili nel sistema (ufficiali + AUR)
       final result = await Process.run('yay', ['-Qu']);
       
       if (result.exitCode == 0) {
@@ -104,11 +116,13 @@ class PacmanService {
           if (line.trim().isEmpty) continue;
           var parts = line.split(RegExp(r'\s+'));
           if (parts.length >= 4) {
+            String name = parts[0];
+            bool isAur = aurPackages.contains(name);
             updates.add(PackageModel(
-              name: parts[0],
+              name: name,
               version: "${parts[1]} -> ${parts[3]}",
-              description: "Aggiornamento disponibile",
-              isAur: true,
+              description: isAur ? "Aggiornamento AUR disponibile" : "Aggiornamento ufficiale disponibile",
+              isAur: isAur,
             ));
           }
         }
