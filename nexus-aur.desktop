@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Nexus AUR
+Comment=Un gestore di pacchetti grafico per Arch Linux e AUR
+Exec=nexus-aur
+Icon=nexus-aur
+Terminal=false
+Type=Application
+Categories=System;PackageManager;

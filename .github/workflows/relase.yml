@@ -35,6 +35,12 @@ jobs:
       - name: Package Release
         run: |
           cd build/linux/x64/release/bundle
+          # Inserisce icona e file desktop nel bundle prima della compressione
+          mkdir -p share/applications share/icons/hicolor/512x512/apps
+          cp ../../../../../nexus-aur.desktop share/applications/
+          cp ../../../../../assets/icon.png share/icons/hicolor/512x512/apps/nexus-aur.png
+
+          # Crea l'archivio tar.gz finale
           tar -czvf ../../../../../nexus-aur-linux-x86_64.tar.gz .
           cd -
 
@@ -50,16 +56,12 @@ jobs:
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
-          # Estrae la versione dal tag (es. v1.0.0 -> 1.0.0)
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
-
-          # Calcola lo SHA256 dell'archivio generato
           SHA256=$(sha256sum nexus-aur-linux-x86_64.tar.gz | awk '{print $1}')
 
           echo "Versione target AUR: $TAG_VERSION"
           echo "SHA256: $SHA256"
 
-          # Configura la chiave SSH per connettersi ad AUR
           mkdir -p ~/.ssh
           echo "$AUR_SSH_KEY" > ~/.ssh/aur_key
           chmod 600 ~/.ssh/aur_key
@@ -70,23 +72,18 @@ jobs:
             StrictHostKeyChecking no
           EOF
 
-          # Clona la repository AUR del pacchetto
           git clone ssh://aur@aur.archlinux.org/nexus-aur-bin.git aur_repo
           cd aur_repo
 
-          # Imposta le credenziali per il commit su AUR
           git config user.name "IlNinjaDiBattipaglia"
           git config user.email "fogliadonato2@gmail.com"
 
-          # Aggiorna versione, pkgrel e checksum sha256sum nel PKGBUILD
           sed -i "s/^pkgver=.*/pkgver=$TAG_VERSION/" PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
           sed -i "s/sha256sums=('.*')/sha256sums=('$SHA256')/" PKGBUILD
 
-          # Rigenera il file .SRCINFO richiesto da AUR
           makepkg --printsrcinfo > .SRCINFO
 
-          # Invia le modifiche su AUR tramite git
           git add PKGBUILD .SRCINFO
           git commit -m "Update to version $TAG_VERSION"
           git push origin master
