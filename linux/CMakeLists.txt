@@ -128,9 +128,9 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
 endif()
 
 # === Integrazione Icona e File Desktop per Linux ===
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon.png"
         DESTINATION "${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/512x512/apps"
         RENAME "nexus-aur.png")
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/nexus-aur.desktop"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../nexus-aur.desktop"
         DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications")
