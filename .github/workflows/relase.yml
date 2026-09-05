@@ -74,7 +74,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to AUR via Arch Linux Container
+      - name: Publish to AUR Natively
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
@@ -84,43 +84,35 @@ jobs:
           echo "Versione target AUR: $TAG_VERSION"
           echo "SHA256: $SHA256"
 
-          docker run --rm \
-            -e AUR_SSH_KEY="$AUR_SSH_KEY" \
-            -e TAG_VERSION="$TAG_VERSION" \
-            -e SHA256="$SHA256" \
-            -v "$(pwd)":/workspace \
-            archlinux:base-devel \
-            bash -c '
-              pacman -Sy --noconfirm git openssh
-              
-              mkdir -p /root/.ssh
-              echo "$AUR_SSH_KEY" > /root/.ssh/aur_key
-              tr -d "\r" < /root/.ssh/aur_key > /root/.ssh/aur_key_fixed
-              mv /root/.ssh/aur_key_fixed /root/.ssh/aur_key
-              chmod 600 /root/.ssh/aur_key
-              
-              cat << "EOF" > /root/.ssh/config
-              Host aur.archlinux.org
-                IdentityFile /root/.ssh/aur_key
-                StrictHostKeyChecking no
-                User aur
-              EOF
+          # Configurazione SSH
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_KEY" > ~/.ssh/aur_key
+          tr -d "\r" < ~/.ssh/aur_key > ~/.ssh/aur_key_fixed
+          mv ~/.ssh/aur_key_fixed ~/.ssh/aur_key
+          chmod 600 ~/.ssh/aur_key
+          
+          cat << 'EOF' > ~/.ssh/config
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur_key
+            StrictHostKeyChecking no
+            User aur
+          EOF
 
-              cd /workspace
-              git clone ssh://aur@aur.archlinux.org/nexus-aur-bin.git aur_repo
-              cd aur_repo
+          # Clona il repo AUR
+          git clone ssh://aur@aur.archlinux.org/nexus-aur-bin.git aur_repo
+          cd aur_repo
 
-              git config --global --add safe.directory /workspace/aur_repo
-              git config user.name "IlNinjaDiBattipaglia"
-              git config user.email "fogliadonato2@gmail.com"
+          git config user.name "IlNinjaDiBattipaglia"
+          git config user.email "fogliadonato2@gmail.com"
 
-              sed -i "s/^pkgver=.*/pkgver=$TAG_VERSION/" PKGBUILD
-              sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
-              sed -i "s/sha256sums=('\x27.*\x27')/sha256sums=('$SHA256')/" PKGBUILD
+          # Aggiorna PKGBUILD e .SRCINFO
+          sed -i "s/^pkgver=.*/pkgver=$TAG_VERSION/" PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          sed -i "s/sha256sums=('\x27.*\x27')/sha256sums=('$SHA256')/" PKGBUILD
 
-              makepkg --printsrcinfo > .SRCINFO
+          sed -i "s/pkgver = .*/pkgver = $TAG_VERSION/" .SRCINFO
+          sed -i "s/sha256sums = .*/sha256sums = $SHA256/" .SRCINFO
 
-              git add PKGBUILD .SRCINFO
-              git commit -m "Update to version $TAG_VERSION"
-              git push origin master
-            '
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to version $TAG_VERSION"
+          git push origin master
