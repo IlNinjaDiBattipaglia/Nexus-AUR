@@ -151,18 +151,12 @@ class PacmanService {
 
   static Future<bool> _runWithSudo(List<String> args, String sudoPassword, Function(String log) onLog) async {
     try {
-      final sudoProcess = await Process.start('sudo', ['-S', 'true']);
-      sudoProcess.stdin.writeln(sudoPassword);
-      await sudoProcess.stdin.flush();
-      await sudoProcess.stdin.close();
+      // Esegue direttamente sudo -S yay con gli argomenti, passando la password via stdin
+      final process = await Process.start('sudo', ['-S', 'yay', ...args]);
 
-      final sudoExitCode = await sudoProcess.exitCode;
-      if (sudoExitCode != 0) {
-        onLog("Errore: Password di root errata o permessi negati.");
-        return false;
-      }
-
-      final process = await Process.start('yay', args);
+      process.stdin.writeln(sudoPassword);
+      await process.stdin.flush();
+      await process.stdin.close();
 
       process.stdout.transform(utf8.decoder).listen(onLog);
       process.stderr.transform(utf8.decoder).listen(onLog);
