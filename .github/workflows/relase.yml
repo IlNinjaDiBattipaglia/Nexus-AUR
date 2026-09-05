@@ -105,14 +105,16 @@ jobs:
           git config user.name "IlNinjaDiBattipaglia"
           git config user.email "fogliadonato2@gmail.com"
 
-          # Aggiorna PKGBUILD e .SRCINFO
-          sed -i "s/^pkgver=.*/pkgver=$TAG_VERSION/" PKGBUILD
-          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
-          sed -i "s/sha256sums=('\x27.*\x27')/sha256sums=('$SHA256')/" PKGBUILD
+          # Aggiorna PKGBUILD (gestendo spazi e resettando pkgrel a 1)
+          sed -i "s/^pkgver[[:space:]]*=.*/pkgver=$TAG_VERSION/" PKGBUILD
+          sed -i "s/^pkgrel[[:space:]]*=.*/pkgrel=1/" PKGBUILD
+          sed -i "s/sha256sums=('[^']*')/sha256sums=('$SHA256')/" PKGBUILD
 
-          sed -i "s/pkgver = .*/pkgver = $TAG_VERSION/" .SRCINFO
-          sed -i "s/sha256sums = .*/sha256sums = $SHA256/" .SRCINFO
+          # Aggiorna .SRCINFO (version, rel e sha256)
+          sed -i "s/[[:space:]]*pkgver[[:space:]]*=.*/\tpkgver = $TAG_VERSION/" .SRCINFO
+          sed -i "s/[[:space:]]*pkgrel[[:space:]]*=.*/\tpkgrel = 1/" .SRCINFO
+          sed -i "s/[[:space:]]*sha256sums[[:space:]]*=.*/\tsha256sums = $SHA256/" .SRCINFO
 
           git add PKGBUILD .SRCINFO
-          git commit -m "Update to version $TAG_VERSION"
+          git commit -m "Update to version $TAG_VERSION (pkgrel reset to 1)"
           git push origin master
