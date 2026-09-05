@@ -9,7 +9,7 @@ jobs:
   build-and-publish:
     name: Build, Package and Publish
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,7 +35,7 @@ jobs:
       - name: Package Tarball and AppImage
         run: |
           BUNDLE_DIR="build/linux/x64/release/bundle"
-
+          
           # --- 1. Creazione Tarball standard ---
           cd "$BUNDLE_DIR"
           mkdir -p share/applications share/icons/hicolor/512x512/apps
@@ -45,21 +45,17 @@ jobs:
           cd -
 
           # --- 2. Creazione AppImage ---
-          # Scarica appimagetool
           wget -O appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
 
-          # Prepara la struttura AppDir
           mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/512x512/apps
           cp -r "$BUNDLE_DIR"/* AppDir/usr/bin/
           cp nexus-aur.desktop AppDir/usr/share/applications/
           cp assets/icon.png AppDir/usr/share/icons/hicolor/512x512/apps/nexus-aur.png
-
-          # Copie richieste da appimagetool nella root di AppDir
+          
           cp nexus-aur.desktop AppDir/nexus-aur.desktop
           cp assets/icon.png AppDir/nexus-aur.png
-
-          # Crea il file AppRun di avvio
+          
           cat << 'EOF' > AppDir/AppRun
           #!/bin/sh
           HERE="$(dirname "$(readlink -f "$0")")"
@@ -67,7 +63,6 @@ jobs:
           EOF
           chmod +x AppDir/AppRun
 
-          # Compila l'AppImage
           ARCH=x86_64 ./appimagetool --appimage-extract-and-run AppDir nexus-aur-x86_64.AppImage
 
       - name: Create GitHub Release
@@ -85,27 +80,26 @@ jobs:
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
           SHA256=$(sha256sum nexus-aur-linux-x86_64.tar.gz | awk '{print $1}')
-
+          
           echo "Versione target AUR: $TAG_VERSION"
           echo "SHA256: $SHA256"
 
-          # Esegue un container Arch Linux per usare makepkg e git in sicurezza
           docker run --rm \
             -e AUR_SSH_KEY="$AUR_SSH_KEY" \
             -e TAG_VERSION="$TAG_VERSION" \
             -e SHA256="$SHA256" \
             -v "$(pwd)":/workspace \
             archlinux:base-devel \
-            bash -c "
-              pacman -Syu --noconfirm git openssh
-
+            bash -c '
+              pacman -Sy --noconfirm git openssh
+              
               mkdir -p /root/.ssh
-              echo \"\$AUR_SSH_KEY\" > /root/.ssh/aur_key
-              tr -d '\r' < /root/.ssh/aur_key > /root/.ssh/aur_key_fixed
+              echo "$AUR_SSH_KEY" > /root/.ssh/aur_key
+              tr -d "\r" < /root/.ssh/aur_key > /root/.ssh/aur_key_fixed
               mv /root/.ssh/aur_key_fixed /root/.ssh/aur_key
               chmod 600 /root/.ssh/aur_key
-
-              cat << 'EOF' > /root/.ssh/config
+              
+              cat << "EOF" > /root/.ssh/config
               Host aur.archlinux.org
                 IdentityFile /root/.ssh/aur_key
                 StrictHostKeyChecking no
@@ -117,16 +111,16 @@ jobs:
               cd aur_repo
 
               git config --global --add safe.directory /workspace/aur_repo
-              git config user.name 'IlNinjaDiBattipaglia'
-              git config user.email 'fogliadonato2@gmail.com'
+              git config user.name "IlNinjaDiBattipaglia"
+              git config user.email "fogliadonato2@gmail.com"
 
-              sed -i \"s/^pkgver=.*/pkgver=\$TAG_VERSION/\" PKGBUILD
-              sed -i \"s/^pkgrel=.*/pkgrel=1/\" PKGBUILD
-              sed -i \"s/sha256sums=('.*')/sha256sums=('\$SHA256')/\" PKGBUILD
+              sed -i "s/^pkgver=.*/pkgver=$TAG_VERSION/" PKGBUILD
+              sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+              sed -i "s/sha256sums=('\x27.*\x27')/sha256sums=('$SHA256')/" PKGBUILD
 
               makepkg --printsrcinfo > .SRCINFO
 
               git add PKGBUILD .SRCINFO
-              git commit -m \"Update to version \$TAG_VERSION\"
+              git commit -m "Update to version $TAG_VERSION"
               git push origin master
-            "
+            '
