@@ -17,7 +17,7 @@ class PackageModel {
 
 class PacmanService {
   
-  // Ricerca robusta: interroga pacman (ufficiali) e yay (AUR) separatamente e unisce i risultati[cite: 1]
+  // Ricerca robusta: interroga pacman (ufficiali) e yay (AUR) separatamente e unisce i risultati
   static Future<List<PackageModel>> searchPackages(String query) async {
     if (query.trim().isEmpty) return [];
 
@@ -51,11 +51,11 @@ class PacmanService {
     return packages;
   }
 
-  // Ottiene la lista di tutti i pacchetti installati (ufficiali + AUR)[cite: 1]
+  // Ottiene la lista di tutti i pacchetti installati (ufficiali + AUR)
   static Future<List<PackageModel>> getInstalledPackages() async {
     List<PackageModel> installed = [];
     try {
-      // Identifica i pacchetti AUR (foreign packages)[cite: 1]
+      // Identifica i pacchetti AUR (foreign packages)
       final foreignResult = await Process.run('yay', ['-Qm']);
       Set<String> aurPackages = {};
       if (foreignResult.exitCode == 0) {
@@ -66,7 +66,7 @@ class PacmanService {
         }
       }
 
-      // Ottiene tutti i pacchetti installati nel sistema[cite: 1]
+      // Ottiene tutti i pacchetti installati nel sistema
       final result = await Process.run('pacman', ['-Q']);
       if (result.exitCode == 0) {
         final output = result.stdout.toString().replaceAll(RegExp(r'\x1b\[[0-9;]*m'), '');
@@ -150,42 +150,51 @@ class PacmanService {
   }
 
   static Future<bool> _runWithSudo(List<String> args, String sudoPassword, Function(String log) onLog) async {
+    Directory? tempDir;
     try {
-      final process = await Process.start('yay', args);
+      // 1. Creiamo una directory temporanea per il wrapper di sudo
+      tempDir = await Directory.systemTemp.createTemp('nexus_sudo_');
+      final sudoScriptFile = File('${tempDir.path}/sudo');
 
-      // Funzione di supporto per analizzare l'output e intercettare le richieste di password
-      void handleOutput(String line) {
-        onLog(line);
-        final lowerLine = line.toLowerCase();
-        // Se il terminale virtuale chiede la password o i privilegi di sudo, glieli forniamo al volo
-        if (lowerLine.contains('password') || lowerLine.contains('sudo') || lowerLine.endsWith(':')) {
-          try {
-            process.stdin.writeln(sudoPassword);
-            process.stdin.flush();
-          } catch (_) {}
-        }
-      }
+      // 2. Scriviamo lo script wrapper che forza l'uso di -S e inietta la password
+      await sudoScriptFile.writeAsString('''
+#!/bin/bash
+echo "$sudoPassword" | /usr/bin/sudo -S "\$@"
+''');
+
+      // 3. Rendiamo lo script eseguibile
+      await Process.run('chmod', ['+x', sudoScriptFile.path]);
+
+      // 4. Inseriamo la cartella temporanea in cima al PATH per intercettare le chiamate a sudo
+      final currentPath = Platform.environment['PATH'] ?? '';
+      final newPath = '${tempDir.path}:$currentPath';
+
+      final process = await Process.start(
+        'yay',
+        args,
+        environment: {'PATH': newPath},
+      );
 
       process.stdout
           .transform(utf8.decoder)
           .transform(const LineSplitter())
-          .listen(handleOutput);
+          .listen(onLog);
 
       process.stderr
           .transform(utf8.decoder)
           .transform(const LineSplitter())
-          .listen(handleOutput);
+          .listen(onLog);
 
       final exitCode = await process.exitCode;
-      
-      try {
-        await process.stdin.close();
-      } catch (_) {}
-
       return exitCode == 0;
     } catch (e) {
       onLog("Errore di esecuzione: $e");
       return false;
+    } finally {
+      // 5. Pulizia della directory temporanea
+      try {
+        await tempDir?.delete(recursive: true);
+      } catch (_) {}
     }
   }
 
