@@ -17,7 +17,7 @@ class PackageModel {
 
 class PacmanService {
   
-  // Ricerca robusta: interroga pacman (ufficiali) e yay (AUR) separatamente e unisce i risultati
+  // Ricerca robusta: interroga pacman (ufficiali) e yay (AUR) separatamente e unisce i risultati[cite: 1]
   static Future<List<PackageModel>> searchPackages(String query) async {
     if (query.trim().isEmpty) return [];
 
@@ -51,11 +51,11 @@ class PacmanService {
     return packages;
   }
 
-  // Ottiene la lista di tutti i pacchetti installati (ufficiali + AUR)
+  // Ottiene la lista di tutti i pacchetti installati (ufficiali + AUR)[cite: 1]
   static Future<List<PackageModel>> getInstalledPackages() async {
     List<PackageModel> installed = [];
     try {
-      // Identifica i pacchetti AUR (foreign packages)
+      // Identifica i pacchetti AUR (foreign packages)[cite: 1]
       final foreignResult = await Process.run('yay', ['-Qm']);
       Set<String> aurPackages = {};
       if (foreignResult.exitCode == 0) {
@@ -66,7 +66,7 @@ class PacmanService {
         }
       }
 
-      // Ottiene tutti i pacchetti installati nel sistema
+      // Ottiene tutti i pacchetti installati nel sistema[cite: 1]
       final result = await Process.run('pacman', ['-Q']);
       if (result.exitCode == 0) {
         final output = result.stdout.toString().replaceAll(RegExp(r'\x1b\[[0-9;]*m'), '');
@@ -165,10 +165,13 @@ echo "$sudoPassword"
       // 3. Rendiamo lo script eseguibile
       await Process.run('chmod', ['+x', askpassFile.path]);
 
-      // 4. Avviamo yay passando SUDO_ASKPASS per la gestione trasparente della password
+      // 4. Parametri extra per blindare yay ed evitare qualsiasi blocco interattivo
+      final fullArgs = [...args, '--answerclean', 'None', '--answerdiff', 'None', '--answeredit', 'None', '--answerupgrade', 'None'];
+
+      // 5. Avviamo yay passando SUDO_ASKPASS per la gestione trasparente della password[cite: 1]
       final process = await Process.start(
         'yay',
-        args,
+        fullArgs,
         environment: {
           'SUDO_ASKPASS': askpassFile.path,
           'SUDO_FORCE_PASSPROMPT': '1',
@@ -187,13 +190,23 @@ echo "$sudoPassword"
           .transform(const LineSplitter())
           .listen(onLog);
 
-      final exitCode = await process.exitCode;
+      final exitCode = await process.exitCode.timeout(
+        const Duration(minutes: 5),
+        onTimeout: () => -1,
+      );
+
+      if (exitCode == 0) {
+        onLog("\n==> Installazione completata con successo!");
+      } else {
+        onLog("\n==> Errore durante l'operazione (Exit Code: $exitCode)");
+      }
+
       return exitCode == 0;
     } catch (e) {
       onLog("Errore di esecuzione: $e");
       return false;
     } finally {
-      // 5. Pulizia della directory temporanea
+      // 6. Pulizia della directory temporanea
       try {
         await tempDir?.delete(recursive: true);
       } catch (_) {}
