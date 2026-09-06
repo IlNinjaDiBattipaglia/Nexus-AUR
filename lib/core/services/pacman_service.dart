@@ -151,8 +151,8 @@ class PacmanService {
 
   static Future<bool> _runWithSudo(List<String> args, String sudoPassword, Function(String log) onLog) async {
     try {
-      // Esegue direttamente sudo -S yay con gli argomenti, passando la password via stdin
-      final process = await Process.start('sudo', ['-S', 'yay', ...args]);
+      // Esegue yay direttamente come utente corrente, passando la password via stdin per sudo interno
+      final process = await Process.start('yay', args);
 
       process.stdin.writeln(sudoPassword);
       await process.stdin.flush();
