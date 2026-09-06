@@ -150,30 +150,12 @@ class PacmanService {
   }
 
   static Future<bool> _runWithSudo(List<String> args, String sudoPassword, Function(String log) onLog) async {
-    Directory? tempDir;
     try {
-      // 1. Creiamo una directory temporanea per il wrapper di sudo
-      tempDir = await Directory.systemTemp.createTemp('nexus_sudo_');
-      final sudoScriptFile = File('${tempDir.path}/sudo');
+      final process = await Process.start('yay', args);
 
-      // 2. Scriviamo lo script wrapper che forza l'uso di -S e inietta la password
-      await sudoScriptFile.writeAsString('''
-#!/bin/bash
-echo "$sudoPassword" | /usr/bin/sudo -S "\$@"
-''');
-
-      // 3. Rendiamo lo script eseguibile
-      await Process.run('chmod', ['+x', sudoScriptFile.path]);
-
-      // 4. Inseriamo la cartella temporanea in cima al PATH per intercettare le chiamate a sudo
-      final currentPath = Platform.environment['PATH'] ?? '';
-      final newPath = '${tempDir.path}:$currentPath';
-
-      final process = await Process.start(
-        'yay',
-        args,
-        environment: {'PATH': newPath},
-      );
+      process.stdin.writeln(sudoPassword);
+      await process.stdin.flush();
+      await process.stdin.close();
 
       process.stdout
           .transform(utf8.decoder)
@@ -190,11 +172,6 @@ echo "$sudoPassword" | /usr/bin/sudo -S "\$@"
     } catch (e) {
       onLog("Errore di esecuzione: $e");
       return false;
-    } finally {
-      // 5. Pulizia della directory temporanea
-      try {
-        await tempDir?.delete(recursive: true);
-      } catch (_) {}
     }
   }
 
