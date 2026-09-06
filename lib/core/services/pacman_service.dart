@@ -150,12 +150,32 @@ class PacmanService {
   }
 
   static Future<bool> _runWithSudo(List<String> args, String sudoPassword, Function(String log) onLog) async {
+    Directory? tempDir;
     try {
-      final process = await Process.start('yay', args);
+      // 1. Creiamo una directory temporanea sicura per lo script askpass
+      tempDir = await Directory.systemTemp.createTemp('nexus_askpass_');
+      final askpassFile = File('${tempDir.path}/askpass.sh');
 
-      process.stdin.writeln(sudoPassword);
-      await process.stdin.flush();
-      await process.stdin.close();
+      // 2. Scriviamo lo script askpass che restituisce la password a sudo
+      await askpassFile.writeAsString('''
+#!/bin/bash
+echo "$sudoPassword"
+''');
+
+      // 3. Rendiamo lo script eseguibile
+      await Process.run('chmod', ['+x', askpassFile.path]);
+
+      // 4. Avviamo yay passando SUDO_ASKPASS per la gestione trasparente della password
+      final process = await Process.start(
+        'yay',
+        args,
+        environment: {
+          'SUDO_ASKPASS': askpassFile.path,
+          'SUDO_FORCE_PASSPROMPT': '1',
+        },
+      );
+
+      process.stdin.close();
 
       process.stdout
           .transform(utf8.decoder)
@@ -172,6 +192,11 @@ class PacmanService {
     } catch (e) {
       onLog("Errore di esecuzione: $e");
       return false;
+    } finally {
+      // 5. Pulizia della directory temporanea
+      try {
+        await tempDir?.delete(recursive: true);
+      } catch (_) {}
     }
   }
 
