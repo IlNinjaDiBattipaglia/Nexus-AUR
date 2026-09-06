@@ -151,17 +151,37 @@ class PacmanService {
 
   static Future<bool> _runWithSudo(List<String> args, String sudoPassword, Function(String log) onLog) async {
     try {
-      // Esegue yay direttamente come utente corrente, passando la password via stdin per sudo interno
       final process = await Process.start('yay', args);
 
-      process.stdin.writeln(sudoPassword);
-      await process.stdin.flush();
-      await process.stdin.close();
+      // Funzione di supporto per analizzare l'output e intercettare le richieste di password
+      void handleOutput(String line) {
+        onLog(line);
+        final lowerLine = line.toLowerCase();
+        // Se il terminale virtuale chiede la password o i privilegi di sudo, glieli forniamo al volo
+        if (lowerLine.contains('password') || lowerLine.contains('sudo') || lowerLine.endsWith(':')) {
+          try {
+            process.stdin.writeln(sudoPassword);
+            process.stdin.flush();
+          } catch (_) {}
+        }
+      }
 
-      process.stdout.transform(utf8.decoder).listen(onLog);
-      process.stderr.transform(utf8.decoder).listen(onLog);
+      process.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(handleOutput);
+
+      process.stderr
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(handleOutput);
 
       final exitCode = await process.exitCode;
+      
+      try {
+        await process.stdin.close();
+      } catch (_) {}
+
       return exitCode == 0;
     } catch (e) {
       onLog("Errore di esecuzione: $e");
