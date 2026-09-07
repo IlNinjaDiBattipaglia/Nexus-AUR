@@ -72,8 +72,8 @@ jobs:
           files: |
             nexus-aur-bin-*.tar.gz
             nexus-aur-x86_64.AppImage
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to AUR Natively
         env:
