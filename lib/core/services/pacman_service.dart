@@ -96,7 +96,6 @@ class PacmanService {
   static Future<List<PackageModel>> getUpdates() async {
     List<PackageModel> updates = [];
     try {
-      // 1. Identifica quali pacchetti installati sono dell'AUR (foreign packages)
       final foreignResult = await Process.run('yay', ['-Qm']);
       Set<String> aurPackages = {};
       if (foreignResult.exitCode == 0) {
@@ -107,7 +106,6 @@ class PacmanService {
         }
       }
 
-      // 2. Ottiene la lista di tutti gli aggiornamenti disponibili nel sistema (ufficiali + AUR)
       final result = await Process.run('yay', ['-Qu']);
       
       if (result.exitCode == 0) {
@@ -134,41 +132,42 @@ class PacmanService {
   }
 
   static Future<bool> installPackage(String packageName, String sudoPassword, Function(String log) onLog) async {
-    return _runWithSudo(['-S', '--noconfirm', '--needed', packageName], sudoPassword, onLog);
+    return _runWithSudo(['-S', '--noconfirm', '--needed', packageName], sudoPassword, onLog, targetPackage: packageName);
   }
 
   static Future<bool> upgradeSinglePackage(String packageName, String sudoPassword, Function(String log) onLog) async {
-    return _runWithSudo(['-S', '--noconfirm', packageName], sudoPassword, onLog);
+    return _runWithSudo(['-S', '--noconfirm', packageName], sudoPassword, onLog, targetPackage: packageName);
   }
 
   static Future<bool> upgradeSystem(String sudoPassword, Function(String log) onLog) async {
-    return _runWithSudo(['-Syu', '--noconfirm'], sudoPassword, onLog);
+    return _runWithSudo(['-Syu', '--noconfirm'], sudoPassword, onLog, isSystemUpgrade: true);
   }
 
   static Future<bool> removePackage(String packageName, String sudoPassword, Function(String log) onLog) async {
     return _runWithSudo(['-Rns', '--noconfirm', packageName], sudoPassword, onLog);
   }
 
-  static Future<bool> _runWithSudo(List<String> args, String sudoPassword, Function(String log) onLog) async {
+  static Future<bool> _runWithSudo(
+    List<String> args,
+    String sudoPassword,
+    Function(String log) onLog, {
+    String? targetPackage,
+    bool isSystemUpgrade = false,
+  }) async {
     Directory? tempDir;
     try {
-      // 1. Creiamo una directory temporanea sicura per lo script askpass
       tempDir = await Directory.systemTemp.createTemp('nexus_askpass_');
       final askpassFile = File('${tempDir.path}/askpass.sh');
 
-      // 2. Scriviamo lo script askpass che restituisce la password a sudo
       await askpassFile.writeAsString('''
 #!/bin/bash
 echo "$sudoPassword"
 ''');
 
-      // 3. Rendiamo lo script eseguibile
       await Process.run('chmod', ['+x', askpassFile.path]);
 
-      // 4. Parametri extra per blindare yay ed evitare qualsiasi blocco interattivo
       final fullArgs = [...args, '--answerclean', 'None', '--answerdiff', 'None', '--answeredit', 'None', '--answerupgrade', 'None'];
 
-      // 5. Avviamo yay passando SUDO_ASKPASS per la gestione trasparente della password[cite: 1]
       final process = await Process.start(
         'yay',
         fullArgs,
@@ -180,15 +179,28 @@ echo "$sudoPassword"
 
       process.stdin.close();
 
+      bool isNexusAurUpdated = false;
+
       process.stdout
           .transform(utf8.decoder)
           .transform(const LineSplitter())
-          .listen(onLog);
+          .listen((line) {
+        onLog(line);
+        // Controlla se durante l'aggiornamento viene toccato il pacchetto nexus-aur
+        if (line.contains('nexus-aur') && (line.contains('aggiornamento') || line.contains('Installing') || line.contains('Upgrading'))) {
+          isNexusAurUpdated = true;
+        }
+      });
 
+      // Gestione stderr pulita: non genera falsi errori di resoconto ma li stampa come avvisi
       process.stderr
           .transform(utf8.decoder)
           .transform(const LineSplitter())
-          .listen(onLog);
+          .listen((line) {
+        if (line.trim().isNotEmpty) {
+          onLog("[AVVISO] $line");
+        }
+      });
 
       final exitCode = await process.exitCode.timeout(
         const Duration(minutes: 5),
@@ -196,7 +208,11 @@ echo "$sudoPassword"
       );
 
       if (exitCode == 0) {
-        onLog("\n==> Installazione completata con successo!");
+        onLog("\n==> Operazione completata con successo!");
+        if (isNexusAurUpdated || (isSystemUpgrade && targetPackage == null)) {
+          // Segnale speciale che può essere intercettato dalla UI per mostrare l'avviso di riavvio app
+          onLog("==> NOTIFICA_RIAVVIO_APP");
+        }
       } else {
         onLog("\n==> Errore durante l'operazione (Exit Code: $exitCode)");
       }
@@ -206,7 +222,6 @@ echo "$sudoPassword"
       onLog("Errore di esecuzione: $e");
       return false;
     } finally {
-      // 6. Pulizia della directory temporanea
       try {
         await tempDir?.delete(recursive: true);
       } catch (_) {}
