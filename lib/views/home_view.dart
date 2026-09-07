@@ -41,16 +41,17 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     if (release != null) {
       String currentVersion = "v1.0.0"; 
       
-      if (release.tagName != currentVersion) {
+      // Mostra il dialog solo se la versione remota è diversa da quella corrente
+      if (release.tagName.trim() != currentVersion.trim()) {
         if (!mounted) return;
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
             title: Row(
               children: [
-                const Icon(Icons.new_releases, color: Colors.purple),
+                const Icon(Icons.system_update, color: Colors.purple),
                 const SizedBox(width: 10),
-                Text("Nuova versione: ${release.tagName}"),
+                Text("Aggiornamento disponibile: ${release.tagName}"),
               ],
             ),
             content: SizedBox(
@@ -60,6 +61,11 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    const Text(
+                      "È disponibile una nuova versione di Nexus-AUR. Ti invitiamo ad aggiornare l'applicazione per beneficiare delle ultime novità.",
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 16),
                     Text(
                       release.name,
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -78,7 +84,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text("Chiudi"),
+                child: const Text("Più tardi"),
               ),
             ],
           ),
