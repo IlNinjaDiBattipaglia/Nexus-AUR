@@ -18,7 +18,7 @@ class GitHubReleaseModel {
 class GitHubService {
   // Sostituisci con il tuo username/repository reale su GitHub
   static const String repoOwner = "IlNinjaDiBattipaglia"; 
-  static const String repoName = "nexus_aur";
+  static const String repoName = "Nexus-AUR";
 
   static Future<GitHubReleaseModel?> getLatestRelease() async {
     try {
