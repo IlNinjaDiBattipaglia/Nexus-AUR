@@ -35,13 +35,14 @@ jobs:
       - name: Package Tarball and AppImage
         run: |
           BUNDLE_DIR="build/linux/x64/release/bundle"
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
           
-          # --- 1. Creazione Tarball standard ---
+          # --- 1. Creazione Tarball standard con versione inclusa ---
           cd "$BUNDLE_DIR"
           mkdir -p share/applications share/icons/hicolor/512x512/apps
           cp ../../../../../nexus-aur.desktop share/applications/
           cp ../../../../../assets/icon.png share/icons/hicolor/512x512/apps/nexus-aur.png
-          tar -czvf ../../../../../nexus-aur-linux-x86_64.tar.gz .
+          tar -czvf ../../../../../nexus-aur-bin-$TAG_VERSION.tar.gz .
           cd -
 
           # --- 2. Creazione AppImage ---
@@ -69,17 +70,17 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            nexus-aur-linux-x86_64.tar.gz
+            nexus-aur-bin-*.tar.gz
             nexus-aur-x86_64.AppImage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to AUR Natively
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
-          SHA256=$(sha256sum nexus-aur-linux-x86_64.tar.gz | awk '{print $1}')
+          SHA256=$(sha256sum nexus-aur-bin-$TAG_VERSION.tar.gz | awk '{print $1}')
           
           echo "Versione target AUR: $TAG_VERSION"
           echo "SHA256: $SHA256"
