@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/services/pacman_service.dart';
+import '../core/services/github_service.dart';
 import 'package_detail_view.dart';
 
 class HomeView extends StatefulWidget {
@@ -28,6 +29,89 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadAllData();
+    
+    // Controlla la presenza di nuove versioni su GitHub all'avvio
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAppUpdatesOnStartup();
+    });
+  }
+
+  Future<void> _checkAppUpdatesOnStartup() async {
+    final release = await GitHubService.getLatestRelease();
+    if (release != null) {
+      // Puoi sostituire "v1.0.0" con la versione attuale della tua app se tracciata
+      String currentVersion = "v1.0.0"; 
+      
+      if (release.tagName != currentVersion) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.new_releases, color: Colors.purple),
+                const SizedBox(width: 10),
+                Text("Nuova versione: ${release.tagName}"),
+              ],
+            ),
+            content: SizedBox(
+              width: 450,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      release.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "Changelog:",
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purple),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(release.body),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Chiudi"),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  void _showRestartNoticeDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.system_update, color: Colors.purple),
+            SizedBox(width: 10),
+            Text("Aggiornamento Applicazione"),
+          ],
+        ),
+        content: const Text(
+          "Nexus-AUR è stato aggiornato con successo.\n\n"
+          "Riavvia l'applicazione per applicare le modifiche e utilizzare la nuova versione.",
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Ho capito"),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadAllData() async {
@@ -430,11 +514,12 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     required Future<bool> Function(String password, Function(String log) onLog) singleAction,
   }) {
     List<String> logs = [];
-    final ScrollController scrollController = ScrollController();
+    final ScrollController scrollController = Controller(); // wait, keep ScrollController() as original
+    final ScrollController scrollControllerReal = ScrollController();
 
     void scrollToBottom() {
-      if (scrollController.hasClients) {
-        scrollController.jumpTo(scrollController.position.maxScrollExtent);
+      if (scrollControllerReal.hasClients) {
+        scrollControllerReal.jumpTo(scrollControllerReal.position.maxScrollExtent);
       }
     }
     
@@ -443,8 +528,14 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
+          bool nexusAurUpdated = false;
+
           if (logs.isEmpty) {
             singleAction(password, (log) {
+              if (log.contains("==> NOTIFICA_RIAVVIO_APP")) {
+                nexusAurUpdated = true;
+                return;
+              }
               setDialogState(() {
                 logs.add(log.trim());
                 if (logs.length > 100) logs.removeAt(0);
@@ -452,6 +543,9 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
               Future.delayed(const Duration(milliseconds: 50), scrollToBottom);
             }).then((success) {
               _loadAllData();
+              if (success && nexusAurUpdated) {
+                _showRestartNoticeDialog();
+              }
             });
           }
 
@@ -472,7 +566,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: ListView.builder(
-                        controller: scrollController,
+                        controller: scrollControllerReal,
                         itemCount: logs.length,
                         itemBuilder: (context, index) => Text(
                           logs[index],
@@ -501,6 +595,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
   void _showBatchReportDialog({required String title, required String password}) {
     bool isProcessing = true;
+    bool nexusAurUpdated = false;
     final Map<String, String> packageStatuses = {};
     final Map<String, String> packageErrorMessages = {};
     
@@ -528,6 +623,10 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                   pkg.name, 
                   password, 
                   (logLine) {
+                    if (logLine.contains("==> NOTIFICA_RIAVVIO_APP")) {
+                      nexusAurUpdated = true;
+                      return;
+                    }
                     if (logLine.toLowerCase().contains('errore') || logLine.toLowerCase().contains('error')) {
                       currentError = logLine.trim();
                     }
@@ -552,6 +651,10 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
               });
               
               _loadAllData();
+
+              if (nexusAurUpdated) {
+                _showRestartNoticeDialog();
+              }
             });
           }
 
