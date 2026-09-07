@@ -39,7 +39,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   Future<void> _checkAppUpdatesOnStartup() async {
     final release = await GitHubService.getLatestRelease();
     if (release != null) {
-      // Puoi sostituire "v1.0.0" con la versione attuale della tua app se tracciata
       String currentVersion = "v1.0.0"; 
       
       if (release.tagName != currentVersion) {
@@ -514,12 +513,11 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     required Future<bool> Function(String password, Function(String log) onLog) singleAction,
   }) {
     List<String> logs = [];
-    final ScrollController scrollController = Controller(); // wait, keep ScrollController() as original
-    final ScrollController scrollControllerReal = ScrollController();
+    final ScrollController scrollController = ScrollController();
 
     void scrollToBottom() {
-      if (scrollControllerReal.hasClients) {
-        scrollControllerReal.jumpTo(scrollControllerReal.position.maxScrollExtent);
+      if (scrollController.hasClients) {
+        scrollController.jumpTo(scrollController.position.maxScrollExtent);
       }
     }
     
@@ -566,7 +564,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: ListView.builder(
-                        controller: scrollControllerReal,
+                        controller: scrollController,
                         itemCount: logs.length,
                         itemBuilder: (context, index) => Text(
                           logs[index],
